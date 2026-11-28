@@ -188,8 +188,8 @@ The result must look like this. The files sit **directly** in `frinet`, not in a
 > **Important:** IDA loads the plugin **only from this folder**, not from `C:\tools\frinet`.
 > Whenever you update the source code, copy the files here again, then **restart IDA**.
 
-**Check:** start IDA, open any 64-bit program, and look at **File → Load file**. You should see
-**"Open Frinet DB..."** and **"Open Frinet call tree..."**. If they are missing, see
+**Check:** start IDA and open any 64-bit program. A **Frinet** menu appears in the menu bar
+(before *Help*), and **File → Load file** shows **"Open Frinet DB..."** and **"Open Frinet call tree..."**. If they are missing, see
 [Troubleshooting](#7-troubleshooting).
 
 ### 3.6 Install the tracer's Python packages
@@ -307,7 +307,7 @@ the `.db` can be larger than the `.tenet`.
 3. **File → Load file → Open Frinet call tree...** and pick the `.calls.txt` file.
    The **Call tree** window opens.
 4. In the Call tree toolbar, click **Graph** and **Story** to open the other two views of the same
-   call list. You can also open them from **File → Load file → Open Frinet call graph... / story...**.
+   call list. You can also open them from the **Frinet** menu.
 
 > Open the **DB first**, then the call list: the Story reads API arguments from the DB.
 > If you opened the Story before the DB, press **Regenerate** in it.
@@ -412,6 +412,21 @@ it itself. The tracer prints the message and writes its buffer, just in case.
 ---
 
 ## 6. How the windows work together in IDA
+
+### The Frinet menu
+
+Everything Frinet can do is in the **Frinet** menu in IDA's menu bar:
+
+| Item | What it does |
+|---|---|
+| Open Frinet DB... / Close trace | Open an indexed trace (`.db`) / close it and its windows |
+| Open Frinet call tree... / call graph... / story... | Open a `.calls.txt` in one of the three views |
+| Show Timeline / Registers / Memory | Bring back a window you closed |
+| Search memory... | Search the whole trace's memory for text or a regular expression |
+| Go to first / prev / next / last execution | For the address under the cursor in the disassembly (same as the right-click menu) |
+| Help (guide)... | Open this guide |
+
+Items that need an open trace are greyed out until you open one.
 
 Everything in the plugin revolves around one thing: **the current time**. Time is the
 position in the trace: instruction number 0, 1, 2... Some windows **change** the time, and all
@@ -548,7 +563,7 @@ A generated account of the trace, written for people:
 
 | Problem | Cause and fix |
 |---|---|
-| No "Open Frinet DB..." / "Open Frinet call tree..." in File → Load file | Check that the files are **directly** in `%APPDATA%\Hex-Rays\IDA Pro\plugins\frinet\` and not in a subfolder (3.5). Restart IDA **completely**. Open **View → Output window** and look for errors mentioning `frinet`. |
+| No **Frinet** menu, and no "Open Frinet DB..." in File → Load file | Check that the files are **directly** in `%APPDATA%\Hex-Rays\IDA Pro\plugins\frinet\` and not in a subfolder (3.5). Restart IDA **completely**. Open **View → Output window** and look for errors mentioning `frinet`. |
 | You changed the code but nothing changes | IDA uses its **own copy** in the plugins folder and reads it only at startup. Copy the files again and restart IDA. |
 | `ModuleNotFoundError: No module named 'frinet_db'` | `frinet_db.pyd` is missing from the plugin folder, or it is still named `.dll`. |
 | `ImportError: DLL load failed while importing frinet_db` | The module was built for a different architecture, or IDA's Python is 32-bit. Use a 64-bit Python 3.10+ in IDA (`idapyswitch`) and rebuild. |

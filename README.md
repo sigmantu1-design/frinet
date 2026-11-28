@@ -63,7 +63,12 @@ The full chain is:
 
 **IDA plugin**
 - **Call tree window**: the call list as a tree. Click to jump to functions and call sites.
-  It follows the timeline (Sync).
+  It follows the timeline (Sync). Shows **real names** (IDA names: PDB symbols, your renames)
+  or **addresses** (`sub_14000E424`).
+- **Graph window**: a **flame chart** (which function runs when, over the whole trace) and a
+  **call graph** (who calls whom, how often), both following the timeline.
+- **Story window**: a readable **narrative** of the trace ("opens file…, writes 16 bytes to
+  handle 0x500…") where **every time and address is a link** you can click.
 - **Memory window follows the trace**: it jumps by itself to the bytes the current instruction reads or writes.
 - **Registers → Memory**: double-click a register value to show that address in the Memory window.
 - **Works with programs at their normal address**: no need to rebase the IDA database to 0
@@ -167,7 +172,11 @@ The result must look like this. The files sit **directly** in `frinet`, not in a
     plugin.py
     core.py
     arch.py
+    calls_model.py
     calltree_widget.py
+    graph_widget.py
+    story_gen.py
+    story_widget.py
     memory_widget.py
     register_widget.py
     search_results_widget.py
@@ -297,6 +306,11 @@ the `.db` can be larger than the `.tenet`.
    **Memory** windows open.
 3. **File → Load file → Open Frinet call tree...** and pick the `.calls.txt` file.
    The **Call tree** window opens.
+4. In the Call tree toolbar, click **Graph** and **Story** to open the other two views of the same
+   call list. You can also open them from **File → Load file → Open Frinet call graph... / story...**.
+
+> Open the **DB first**, then the call list: the Story reads API arguments from the DB.
+> If you opened the Story before the DB, press **Regenerate** in it.
 
 You can now explore. See section 6.
 
@@ -411,9 +425,13 @@ windows **show the program state** at the current time.
    │ Disassembly: right-click →     │──> CURRENT ──>│ Memory: bytes; follows the accesses │
    │   Go to first/prev/next/last   │     TIME      │ Call tree: active call (Sync)       │
    │ Call tree: double-click        │               │ Timeline: position marker           │
+   │ Graph: click / double-click    │               │ Graph: red cursor, active chain     │
+   │ Story: click a link            │               │ Story: current paragraph            │
    │ Memory: Ctrl+wheel on a bp     │               └─────────────────────────────────────┘
    │ Search results: double-click   │
    └────────────────────────────────┘
+
+Every window with a **Sync** checkbox follows the current time; untick it to keep the window still.
 ```
 
 ### Disassembly (IDA View)
@@ -453,14 +471,60 @@ windows **show the program state** at the current time.
 - **Double-click "Called from"**: jump to the call instruction **and** move the time to that
   call. The registers then show the call's arguments (on x64 Windows: `rcx`, `rdx`, `r8`, `r9`).
 - **Right-click → Go to return**: move the time to the moment that call returned
-  (the return value is in `rax`).
+  (for a traced function, the return value is in `rax`; for an `[API]` call traced with `-e`,
+  `rax` is not recorded, because the API itself runs untraced).
+- **Names**: **Real names** shows the current IDA names: function names from PDB symbols, or
+  the names **you give** functions in IDA (press **N** on a function). They update in every view as soon as you
+  rename. **Addresses** shows `sub_<address>`, as in the call list file.
+- **Graph** / **Story** buttons: open the other views of the same call list.
 - **Sync** (on by default): when the time changes anywhere, the tree selects the function
   running at that moment, with the chain of active calls in **bold**.
 - **Filter** box: show only branches containing a name (e.g. `WriteFile`). **APIs**: hide or show API calls.
 - The **Line** / **Return line** columns are line numbers in the `.tenet` file.
 
+### Graph (this fork)
+Two tabs, both following the timeline:
+
+- **Timeline (flame chart)**: time runs from left to right (the axis shows `.tenet` line
+  numbers). Each call is a **bar** from the moment it is called to the moment it returns. Bars
+  stacked below it are the calls it makes; thin magenta bars are API calls. The **red line** is
+  the current time; the chain of calls active at that moment is **outlined in yellow**.
+  - **Mouse wheel**: zoom in/out around the mouse. **Drag**: move left/right. **Fit**: show everything.
+  - **Click**: move the trace time to that moment. **Double-click a bar**: go to that call (time + IDA).
+  - Hover over a bar to see its name, lines and instruction count.
+  - Use it to see the **shape** of the execution at a glance: long bars = where the time is spent,
+    repeated patterns = loops.
+- **Call graph**: one box per function, arrows = "calls", `×N` = how many times. The chain
+  active at the current time is **yellow** with **red** arrows.
+  - **Click a box**: jump to the **next** call of that function after the current time. Click
+    again for the one after (it wraps around). This is how you step through the
+    **transitions** between functions over time.
+  - **Double-click a box**: go to the function in IDA. **Wheel**: zoom. **Drag**: move.
+- **APIs** checkbox: hide API calls to see only the program's own functions.
+
+### Story (this fork)
+A generated account of the trace, written for people:
+
+- **Summary**: how long the trace is, how many functions and API calls, the most used APIs.
+- **Key events**: the important API calls grouped by topic (files, registry, processes, modules,
+  network, cryptography, COM...), with their **decoded arguments**: file names, sizes, access
+  rights, registry keys, window messages (`EM_GETHANDLE`, `SB_SETTEXTW`...), code pages...
+- **Step by step**: what the traced function does, in order, with nested calls and what happens inside them.
+- **Every `line N` and every function name is a link**: click it to move the trace time there
+  (all windows follow) and show the code in IDA.
+- **Sync**: the paragraph about the current time is highlighted as you move through the trace.
+- **Save as...**: save the story as Markdown or HTML (the links are kept as text).
+  **Open...**: open a story **written by hand** (by you, or by an AI assistant from the call
+  list): any Markdown/HTML file whose links use `line:<n>`, `go:<line>:<address>`, `t:<time>` or
+  `ea:<address>` becomes clickable in the same way.
+- **Limits**: arguments come from registers `rcx`, `rdx`, `r8`, `r9` (the first four arguments
+  on x64 Windows). A string shows as *"not in trace"* when its bytes were written by code that
+  wasn't traced (for example by the Save dialog, with `-e`). API return values are not shown,
+  because with `-e` they are not recorded.
+
 ### A typical workflow
-1. In the **Call tree**, find the interesting API call, for example `WriteFile`.
+1. Read the **Story** to get the big picture, and click the moment that interests you, or find
+   the interesting API call in the **Call tree**, for example `WriteFile`.
 2. Double-click its **Called from**. The time moves to the call, and IDA shows the call instruction.
 3. In **Registers**, double-click `rdx` (the buffer argument). **Memory** shows the buffer.
 4. Select the bytes, then **Break on writes** and **Ctrl+wheel up** to find the instruction that wrote them.
@@ -495,6 +559,10 @@ windows **show the program state** at the current time.
 | The Memory window shows only `??` | You are looking at an address the trace never touched (it starts at 0). Use **Follow memory accesses**, press **G**, or double-click a register. Bytes written by excluded DLLs (`-e`) are never known. |
 | `libshiboken: Internal C++ object (...) already deleted` | Fixed in this fork. Install the current plugin files. |
 | The Call tree can't jump to a function (`cannot resolve ...` in the Output window) | The IDA database is a different build than the traced program, or the API is not imported under that name. |
+| **Real names** still show `sub_...` | IDA has no name for that function. Load the program's symbols (**File → Load file → PDB file...**; for Windows files IDA can download them from Microsoft), or rename the function yourself (**N**). |
+| The Story shows `?` for API arguments | The Frinet DB was not open when the Story was created. Open the DB, then press **Regenerate**. |
+| No **Graph** / **Story** buttons in the Call tree | Old plugin files: copy all `.py` files again (3.5), including `calls_model.py`, `graph_widget.py`, `story_gen.py`, `story_widget.py`, then restart IDA. |
+| The Graph is slow to draw on a huge trace | Untick **APIs**, zoom into a part of the trace, or trace a smaller function (section 5). |
 
 ### Tracing
 
